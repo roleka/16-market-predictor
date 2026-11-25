@@ -33,11 +33,12 @@ button:active{transform:scale(.99)}
 .metrics{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}.metric{background:#0e1929;border-radius:12px;padding:12px}.metric b{display:block;font-size:21px;margin-top:3px}
 .notice{padding:11px;border-radius:11px;background:#332a17;color:#f5d99c;font-size:12px;line-height:1.5;margin-top:12px}
 .historyitem{border-top:1px solid var(--line);padding:10px 0;font-size:13px}
+.oddsrow{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:8px 0 10px}.oddcell{background:#0e1929;border:1px solid var(--line);border-radius:12px;padding:9px 6px;text-align:center}.oddcell .k{font-size:12px;color:var(--muted)}.oddcell b{display:block;font-size:20px;margin-top:2px}.oddcell .p{font-size:11px;color:var(--muted)}.oddcell.pick{border-color:var(--green);background:#123327}.oddcell.pick .k{color:var(--green)}
 @media(min-width:650px){.fieldgrid{grid-template-columns:repeat(3,minmax(0,1fr))}main{padding:22px}}
 </style>
 </head>
 <body>
-<header><div class="brand"><div class="logo">16M</div><div><h1>16-Market Predictor</h1><div class="sub">105-feature fitted model · offline-capable · v1.4</div></div></div></header>
+<header><div class="brand"><div class="logo">16M</div><div><h1>16-Market Predictor</h1><div class="sub">105-feature fitted model · offline-capable · v1.8</div></div></div></header>
 <main>
 <section class="card">
 <h2>Match details</h2>
@@ -77,7 +78,8 @@ button:active{transform:scale(.99)}
 </section>
 <section class="card result" id="resultCard">
 <h2>Prediction result</h2>
-<div id="matchName" class="muted" style="text-align:center"></div>
+<div id="matchName" style="text-align:center;font-size:22px;font-weight:800;margin:2px 0 6px"></div>
+<div id="oddsRow" class="oddsrow"></div>
 <div id="score" class="score">—</div>
 <div id="outcome" class="outcome"></div>
 <div class="metrics">
