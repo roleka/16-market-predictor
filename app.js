@@ -97,31 +97,82 @@ function loadHistory(){
 $("saveResult").onclick=saveHistory;
 $("clearHistory").onclick=()=>{if(confirm("Delete saved predictions on this device?")){localStorage.removeItem("predHistory");loadHistory()}};
 $("downloadResult").onclick=()=>{if(!LAST)return;const rows=[["Home","Away","Raw home","Raw away","Score","Outcome","Inputs supplied","Mean imputed"],[LAST.homeTeam,LAST.awayTeam,LAST.homeRaw,LAST.awayRaw,LAST.score,LAST.outcome,LAST.supplied,LAST.missing]];download("prediction_result.csv",rows.map(r=>r.map(csvEscape).join(",")).join("\n"))};
-let OCR_ODDS=[];
-$("runOcr").onclick=async()=>{
- const files=[...($("ocrFiles").files||[])];if(!files.length){alert("Choose at least one screenshot.");return}
- if(!window.Tesseract){$("ocrStatus").textContent="OCR engine did not load. Connect to the internet and reload the app.";return}
- $("ocrStatus").textContent="Reading screenshots…";
- let texts=[];
- try{
-  for(let i=0;i<files.length;i++){
-   $("ocrStatus").textContent=`Reading screenshot ${i+1} of ${files.length}…`;
-   const result=await Tesseract.recognize(files[i],"eng",{logger:m=>{if(m.status==="recognizing text")$("ocrStatus").textContent=`OCR ${i+1}/${files.length}: ${Math.round((m.progress||0)*100)}%`}});
-   texts.push(result.data.text);
+let OCR_MATCHES={};
+function cleanOcrLine(s){return String(s||"").replace(/[|¦]/g," ").replace(/[‐‑‒–—]/g,"-").replace(/\s+/g," ").trim()}
+function oddsIn(s){return [...String(s).matchAll(/(?<![\d.])(\d{1,3}[.,]\d{2})(?![\d.])/g)].map(m=>({v:Number(m[1].replace(",",".")),i:m.index})).filter(x=>Number.isFinite(x.v)&&x.v>=1.01&&x.v<=1000)}
+function putMatch(out,key,odd,line){if(!key||!Number.isFinite(odd)||odd<1.01||odd>1000)return;if(out[key]&&Math.abs(out[key].odd-odd)>.001){out[key].conflict=true;out[key].alternatives=[out[key].odd,odd];return;}out[key]={odd,line};}
+function parseMarketOCR(raw){
+ const lines=String(raw||"").split(/\r?\n/).map(cleanOcrLine).filter(Boolean),out={};let active=null,half=false;
+ for(const line of lines){const lo=line.toLowerCase();
+  if(/next screenshot/.test(lo)){active=null;continue;}
+  if(/1st\s*half\s*1x2/.test(lo)){half=true;active="HT_1X2";continue;}
+  if(/1st\s*half\s*(o\s*\/\s*u|over\s*\/\s*under)/.test(lo)){half=true;active="HT_OU";continue;}
+  if(/1st\s*half\s*double chance/.test(lo)){half=true;active="HT_Double_Chance";continue;}
+  if(/1st\s*half.*first goal/.test(lo)){active="HT_First_Goal";continue;}
+  if(/1x2.*1up/.test(lo)){half=false;active="FT_1X2_1UP";continue;}
+  if(/1x2.*2up/.test(lo)){half=false;active="FT_1X2_2UP";continue;}
+  if(/incorrect score/.test(lo)){active="Incorrect_Score_proxy";continue;}
+  if(/correct score/.test(lo)){active="Correct_Score";continue;}
+  if(/home team\s*(o\s*\/\s*u|over|under)/.test(lo)){active="Home_Team_OU";continue;}
+  if(/away team\s*(o\s*\/\s*u|over|under)/.test(lo)){active="Away_Team_OU";continue;}
+  if(/teams? to score/.test(lo)){active="Teams_to_Score";continue;}
+  if(/gg\s*\/\s*ng/.test(lo)){active="GG_NG";continue;}
+  if(/handicap/.test(lo)){active="HANDICAP";continue;}
+  if(/double chance/.test(lo)){active="FT_Double_Chance";continue;}
+  if(/first goal/.test(lo)){active="HT_First_Goal";continue;}
+  if(/^1x2\b/.test(lo)){active="FT_1X2";half=false;continue;}
+  if(/^(o\s*\/\s*u|over\s*\/\s*under)\b/.test(lo)){active=half?"HT_OU":"FT_OU";continue;}
+  if(/2nd half/.test(lo)){active=null;continue;}
+  const odds=oddsIn(line);if(!odds.length||!active)continue;
+  if(["FT_1X2","FT_1X2_1UP","FT_1X2_2UP","HT_1X2"].includes(active)){
+   const labels=[...lo.matchAll(/\b(home|draw|away)\b/g)].map(m=>m[1]);if(labels.length>=3&&odds.length>=3)labels.slice(0,3).forEach((lab,j)=>putMatch(out,`${active}__${lab[0].toUpperCase()+lab.slice(1)}`,odds[j].v,line));continue;
   }
-  const all=texts.join("\\n\\n--- NEXT SCREENSHOT ---\\n\\n");$("ocrText").value=all;
-  OCR_ODDS=[...all.matchAll(/(?<![\d.])(\d{1,3}\.\d{2})(?![\d.])/g)].map(m=>Number(m[1])).filter(n=>n>=1.01&&n<=1000);
-  $("ocrOdds").textContent=`Detected ${OCR_ODDS.length} possible decimal odds. Review the recognized text and the sequence before importing.`;
-  $("ocrStatus").textContent="OCR complete. Check the extracted text for recognition errors.";
- }catch(e){$("ocrStatus").textContent="OCR failed: "+e.message}
+  if(["FT_Double_Chance","HT_Double_Chance"].includes(active)){if(odds.length>=3)["1X","12","X2"].forEach((k,j)=>putMatch(out,`${active}__${k}`,odds[j].v,line));continue;}
+  if(active==="GG_NG"){if(odds.length>=2){putMatch(out,"GG_NG__GG_Yes",odds[0].v,line);putMatch(out,"GG_NG__NG_No",odds[1].v,line);}continue;}
+  if(active==="Teams_to_Score"){
+   const rules=[[/\bnone\b/i,"None"],[/only\s*home/i,"Only_Home"],[/only\s*away/i,"Only_Away"],[/both\s*teams|both\b/i,"Both"]];
+   let found=false;for(const [re,k] of rules){const hit=re.exec(line);if(hit){const val=odds.find(x=>x.i>=hit.index);if(val){putMatch(out,`Teams_to_Score__${k}`,val.v,line);found=true;}}}
+   if(!found&&odds.length>=4)["None","Only_Home","Only_Away","Both"].forEach((k,j)=>putMatch(out,`Teams_to_Score__${k}`,odds[j].v,line));continue;
+  }
+  if(active==="HT_First_Goal"){if(odds.length>=3)["Home","None","Away"].forEach((k,j)=>putMatch(out,`HT_First_Goal__${k}`,odds[j].v,line));continue;}
+  if(active==="HANDICAP"){
+   const h=line.match(/\b(0\s*[:\-]\s*1|0\s*[:\-]\s*2|1\s*[:\-]\s*0|2\s*[:\-]\s*0)\b/);
+   if(h&&odds.length>=3){const key={"0-1":"Handicap_0_1","0-2":"Handicap_0_2","1-0":"Handicap_1_0","2-0":"Handicap_2_0"}[h[1].replace(/\s/g,"").replace(":","-")];if(key)["Home","Draw","Away"].forEach((k,j)=>putMatch(out,`${key}__${k}`,odds[j].v,line));}continue;
+  }
+  if(["FT_OU","HT_OU","Home_Team_OU","Away_Team_OU"].includes(active)){
+   const head=line.slice(0,odds[0].i).trim(),m=head.match(/^(0?\.5|1\.5|2\.5|3\.5|4\.5|5\.5|05|15|25|35|45|55)\b/);
+   if(m&&odds.length>=2){let t=m[1].replace(/^0(?=\.5)/,"");if(!t.includes("."))t=String(Number(t)/10);const n=Number(t);if(n>=.5&&n<=5.5){putMatch(out,`${active}__Over_${n}`,odds[0].v,line);putMatch(out,`${active}__Under_${n}`,odds[1].v,line);}}continue;
+  }
+  if(["Correct_Score","Incorrect_Score_proxy"].includes(active)){
+   const re=/\b([0-4])\s*[:\-]\s*([0-4])\b/g;let m;while((m=re.exec(line))){const odd=odds.find(x=>x.i>=m.index+m[0].length);if(odd){const k=`${m[1]}-${m[2]}`;putMatch(out,`${active}__${k}`,odd.v,line);}}
+   if(active==="Correct_Score"&&/\bother\b/i.test(line))putMatch(out,"Correct_Score__Other",odds[odds.length-1].v,line);continue;
+  }
+ }
+ return out;
+}
+function showOcrReport(){const entries=Object.entries(OCR_MATCHES),conflicts=entries.filter(([,v])=>v.conflict),missing=MODEL.features.filter(k=>!OCR_MATCHES[k]);
+ const names=entries.map(([k,v])=>`${k.replaceAll("__"," / ")}: ${v.odd.toFixed(2)}${v.conflict?" ⚠ conflict":""}`);
+ $("ocrOdds").textContent=`Matched ${entries.length}/105 features. Conflicts: ${conflicts.length}. Not found: ${missing.length}.\n`+names.join("\n")+(missing.length?`\n\nNot found: ${missing.slice(0,18).join(", ")}${missing.length>18?" …":""}`:"");
+}
+$("runOcr").onclick=async()=>{
+ const files=[...($("ocrFiles").files||[])];if(!files.length){alert("Choose at least one screenshot.");return;}
+ if(!window.Tesseract){$("ocrStatus").textContent="OCR engine did not load. Connect to the internet and reload the app.";return;}
+ $("ocrStatus").textContent="Reading screenshots…";let texts=[];
+ try{for(let i=0;i<files.length;i++){$("ocrStatus").textContent=`Reading screenshot ${i+1} of ${files.length}…`;
+  const result=await Tesseract.recognize(files[i],"eng",{logger:m=>{if(m.status==="recognizing text")$("ocrStatus").textContent=`OCR ${i+1}/${files.length}: ${Math.round((m.progress||0)*100)}%`;}});
+  texts.push((result.data.lines||[]).map(x=>x.text).join("\n")||result.data.text);
+ }
+ const all=texts.join("\n\n--- NEXT SCREENSHOT ---\n\n");$("ocrText").value=all;OCR_MATCHES=parseMarketOCR(all);showOcrReport();
+ $("ocrStatus").textContent=`OCR complete. Identified ${Object.keys(OCR_MATCHES).length} market-feature matches. Review the mapping report before filling.`;
+ }catch(e){$("ocrStatus").textContent="OCR failed: "+e.message;}
 };
-$("copyOcr").onclick=()=>{if(!$("ocrText").value)return; navigator.clipboard?.writeText($("ocrText").value).then(()=>alert("OCR text copied."),()=>alert("Copy not available in this browser."))};
+$("copyOcr").onclick=()=>{if(!$("ocrText").value)return;navigator.clipboard?.writeText($("ocrText").value).then(()=>alert("OCR text copied."),()=>alert("Copy not available in this browser."));};
 $("fillOcr").onclick=()=>{
- if(!OCR_ODDS.length){alert("Run OCR first.");return}
- if(!confirm(`Fill the first ${Math.min(OCR_ODDS.length,MODEL.features.length)} detected odds into the first ${Math.min(OCR_ODDS.length,MODEL.features.length)} model fields in feature order? This is only safe if the screenshots show markets in exactly that order. Continue only after reviewing the OCR text.`))return;
- const inputs=[...document.querySelectorAll("[data-feature]")];
- OCR_ODDS.slice(0,inputs.length).forEach((v,i)=>inputs[i].value=v.toFixed(2));
- alert(`Filled ${Math.min(OCR_ODDS.length,inputs.length)} fields. Verify every market/odds pairing before calculating.`);
+ const entries=Object.entries(OCR_MATCHES).filter(([,v])=>!v.conflict);if(!entries.length){alert("No reliable market-to-feature matches were found. Check the OCR text and screenshots.");return;}
+ const conflicts=Object.entries(OCR_MATCHES).filter(([,v])=>v.conflict).length;
+ if(!confirm(`Fill ${entries.length} recognised odds into their matching market fields? This does not use sequence order. ${conflicts} conflicting fields will be skipped. Existing values will be replaced where a match is found.`))return;
+ entries.forEach(([key,v])=>{const el=document.querySelector(`[data-feature="${CSS.escape(key)}"]`);if(el)el.value=v.odd.toFixed(2);});
+ $("ocrStatus").textContent=`Filled ${entries.length} market-matched fields. ${conflicts} conflicts skipped. Review any fields not found before predicting.`;
 };
 if("serviceWorker" in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));
 init().catch(e=>{document.querySelector("main").innerHTML="<section class=card>Could not load model data. Make sure all app files are in the same folder and open through a web server.</section>";console.error(e)});
