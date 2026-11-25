@@ -1,5 +1,5 @@
 // Change CACHE on every release so old copies are removed.
-const CACHE='16market-v1.4';
+const CACHE='16market-v1.8';
 const FILES=['./','./index.html','./app.js','./model.json','./features.json','./manifest.webmanifest','./icon.svg'];
 
 self.addEventListener('install',e=>{
