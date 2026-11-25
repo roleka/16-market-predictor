@@ -25,8 +25,12 @@ The app does not currently OCR screenshots automatically. Enter odds manually or
 The fitted model is experimental and trained on synthetic data; it is not a validated betting system.
 
 
-NEW IN VERSION 1.1:
-- Screenshot OCR assistant: select image screenshots, run OCR, review recognized text, optionally fill detected odds sequentially into feature order. This sequential fill is only appropriate if screenshot market order exactly matches model feature order. Check all fields manually.
+NEW IN VERSION 1.2:
+- Replaced sequential OCR filling with market-aware extraction. The app recognises market headings and maps odds to named features rather than filling fields by number order.
+- Supports full-time and first-half 1X2, O/U, double chance, GG/NG, handicap lines, teams-to-score, correct score, incorrect-score proxy, home-team O/U and away-team O/U.
+- Overlapping screenshots with identical values are deduplicated. Conflicting values are flagged and skipped. Missing or locked outcomes remain blank.
+- The OCR report lists matched features and missing fields. Use Validate & Fill Matched Odds to populate only recognised fields, then inspect the report before calculating.
+- OCR still depends on Tesseract.js being available from its CDN on first use; the prediction engine itself remains local.
 - Actual-result tracking: save a prediction, then enter the final score to calculate outcome and exact-score accuracy.
 - Performance dashboard: calculates hit rates only from logged predictions with actual results.
 - Contribution display: lists largest fitted linear-model contributions toward the home side. These are model arithmetic contributions, not causal explanations.
