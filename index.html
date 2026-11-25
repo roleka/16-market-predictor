@@ -53,19 +53,19 @@ button:active{transform:scale(.99)}
 </section>
 <section class="card">
 <h2>Screenshot OCR assistant</h2>
-<div class="small">Upload one or more market screenshots. OCR extracts visible text and decimal odds for review. It does not know which market each number belongs to unless the screenshots follow the same feature order, so always verify before calculating.</div>
+<div class="small">Upload one or more market screenshots. The app identifies market headings and maps odds to matching feature names. It will not fill by number sequence. Review the detected matches and any missing fields before calculating.</div>
 <div class="row" style="margin-top:10px;align-items:end">
 <div><label for="ocrFiles">Choose screenshots</label><input id="ocrFiles" type="file" accept="image/*" multiple style="width:100%;color:var(--muted)"></div>
 <button id="runOcr" class="primary" style="flex:0 0 auto">Read screenshots</button>
 </div>
 <div id="ocrStatus" class="small" style="margin-top:9px">OCR requires an internet connection the first time to load its recognition engine.</div>
 <textarea id="ocrText" rows="5" placeholder="Recognized text will appear here..." style="width:100%;margin-top:9px;background:#0c1626;border:1px solid #34445d;border-radius:10px;padding:11px;color:var(--txt);resize:vertical"></textarea>
-<div class="actions" style="margin-top:9px"><button id="copyOcr">Copy OCR text</button><button id="fillOcr" class="ghost">Fill odds in feature order</button></div>
-<div id="ocrOdds" class="small" style="margin-top:8px"></div>
+<div class="actions" style="margin-top:9px"><button id="copyOcr">Copy OCR text</button><button id="fillOcr" class="ghost">Validate & Fill Matched Odds</button></div>
+<div id="ocrOdds" class="small" style="margin-top:8px;white-space:pre-wrap"></div>
 </section>
 <section class="card">
 <div class="row" style="align-items:center">
-<div><h2 style="margin:0">Market odds input</h2><div class="small">105 individual outcomes across 16 market groups</div></div>
+<div><h2 style="margin:0">Market odds input</h2><div class="small">105 individual outcomes across 19 market groups</div></div>
 <button id="fillDemo" class="ghost" style="flex:0 0 auto">Demo values</button>
 </div>
 <div id="markets"></div>
@@ -89,18 +89,7 @@ button:active{transform:scale(.99)}
 <div id="drivers" class="small" style="margin-top:12px"></div><div class="notice">Experimental model: trained using synthetic data, not validated on a sufficiently large real-match dataset. This output is not a calibrated probability or guarantee. Keep predictions for forward testing.</div>
 <div class="actions" style="margin-top:12px"><button class="primary" id="saveResult">Save to device history</button><button id="downloadResult">Download result CSV</button></div>
 </section>
-<section class="card">
-<h2>Screenshot OCR assistant</h2>
-<div class="small">Upload one or more market screenshots. OCR extracts visible text and decimal odds for review. It does not know which market each number belongs to unless the screenshots follow the same feature order, so always verify before calculating.</div>
-<div class="row" style="margin-top:10px;align-items:end">
-<div><label for="ocrFiles">Choose screenshots</label><input id="ocrFiles" type="file" accept="image/*" multiple style="width:100%;color:var(--muted)"></div>
-<button id="runOcr" class="primary" style="flex:0 0 auto">Read screenshots</button>
-</div>
-<div id="ocrStatus" class="small" style="margin-top:9px">OCR requires an internet connection the first time to load its recognition engine.</div>
-<textarea id="ocrText" rows="5" placeholder="Recognized text will appear here..." style="width:100%;margin-top:9px;background:#0c1626;border:1px solid #34445d;border-radius:10px;padding:11px;color:var(--txt);resize:vertical"></textarea>
-<div class="actions" style="margin-top:9px"><button id="copyOcr">Copy OCR text</button><button id="fillOcr" class="ghost">Fill odds in feature order</button></div>
-<div id="ocrOdds" class="small" style="margin-top:8px"></div>
-</section>
+
 <section class="card" id="dashboardCard">
 <h2>Model performance dashboard</h2>
 <div class="metrics">
