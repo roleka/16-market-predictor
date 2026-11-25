@@ -126,7 +126,13 @@ function predict(){
 
   $("matchName").textContent=LAST.homeTeam+" vs "+LAST.awayTeam;
   $("score").textContent=LAST.score;
-  $("outcome").textContent=LAST.outcome;
+  renderOddsRow(LAST);
+
+  // Stored outcome stays "Home win"/"Draw"/"Away win" so accuracy
+  // tracking is unchanged; only the display uses team names.
+  $("outcome").textContent=
+    LAST.outcome==="Home win"?`${LAST.homeTeam} win (home)`:
+    LAST.outcome==="Away win"?`${LAST.awayTeam} win (away)`:"Draw";
   $("rawHome").textContent=LAST.homeRaw.toFixed(4);
   $("rawAway").textContent=LAST.awayRaw.toFixed(4);
   $("supplied").textContent=LAST.supplied+" / "+NFEAT();
@@ -142,6 +148,29 @@ function predict(){
   $("resultCard").scrollIntoView({
     behavior:"smooth",
     block:"start"
+  });
+}
+
+// Full-time 1X2 odds shown between the team names and the score.
+// The cell matching the predicted outcome is highlighted. The small %
+// is the bookmaker's implied chance with its margin removed.
+function renderOddsRow(r){
+  const o=["Home","Draw","Away"].map(k=>r.values["FT_1X2__"+k]);
+  const ok=o.every(validOdd);
+  const inv=ok?o.map(x=>1/x):null;
+  const sum=ok?inv.reduce((a,b)=>a+b,0):0;
+  const pickIdx={"Home win":0,"Draw":1,"Away win":2}[r.outcome];
+  const head=[`1 · ${r.homeTeam}`,"X · Draw",`2 · ${r.awayTeam}`];
+  const root=$("oddsRow");
+  root.innerHTML="";
+  o.forEach((v,i)=>{
+    const c=document.createElement("div");
+    c.className="oddcell"+(i===pickIdx?" pick":"");
+    const k=document.createElement("div");k.className="k";k.textContent=head[i];
+    const b=document.createElement("b");b.textContent=validOdd(v)?v.toFixed(2):"—";
+    const p=document.createElement("div");p.className="p";
+    p.textContent=ok?`${(100*inv[i]/sum).toFixed(0)}% implied`:"";
+    c.append(k,b,p);root.appendChild(c);
   });
 }
 
@@ -316,7 +345,10 @@ function loadHistory(){
 
     const date=document.createElement("div");
     date.className="small";
-    date.textContent=new Date(x.created).toLocaleString();
+    const v1=x.values||{};
+    const o3=["Home","Draw","Away"].map(k=>v1["FT_1X2__"+k]);
+    date.textContent=new Date(x.created).toLocaleString()+
+      (o3.every(validOdd)?` · 1X2: ${o3.map(n=>n.toFixed(2)).join(" / ")}`:"");
 
     const row=document.createElement("div");
     row.className="row";
@@ -439,8 +471,32 @@ function oddsLoose(s){
   const fixed=[...str.matchAll(/(?<![\d.,:\-])(\d{3,4})(?![\d.,:\-])/g)]
     .map(m=>({v:Number(m[1])/100,i:m.index,rep:true,raw:m[1]}))
     .filter(x=>x.v>=1.01&&x.v<=100);
-  return [...good,...fixed].sort((a,b)=>a.i-b.i);
+  // Colon read instead of a decimal point: "1:15" -> 1.15. A single digit
+  // before and two after, so scores (1:0) and times (03:24) never match.
+  const colon=[...str.matchAll(/(?<![\d.,:])(\d):(\d{2})(?![\d.,:])/g)]
+    .map(m=>({v:Number(m[1]+"."+m[2]),i:m.index,rep:true,raw:m[0]}))
+    .filter(x=>x.v>=1.01);
+  return [...good,...fixed,...colon].sort((a,b)=>a.i-b.i);
 }
+
+// Prices and locked cells in screen order, after position `from`.
+// The app writes "LOCKED" into lock cells before OCR, so a row like
+// "Home 1.16 Home LOCKED Draw or 2.45" still lines up with its columns.
+function slots(line,from=-1){
+  const locks=[...String(line).matchAll(/locked/gi)].map(m=>({locked:true,i:m.index}));
+  return [...oddsLoose(line),...locks].filter(x=>x.i>from).sort((a,b)=>a.i-b.i);
+}
+
+function putSlots(out,keys,sl,line){
+  if(sl.length!==keys.length)return false;
+  keys.forEach((k,j)=>{if(!sl[j].locked)putFrom(out,k,sl[j],line);});
+  return true;
+}
+
+const PAGE_ORDER=["FT_1X2","FT_1X2_1UP","FT_1X2_2UP","FT_OU","Home_Team_OU",
+  "Away_Team_OU","FT_Double_Chance","GG_NG","HANDICAP","Teams_to_Score",
+  "Correct_Score","Incorrect_Score_proxy","HT_1X2","HT_OU",
+  "HT_Double_Chance","HT_First_Goal"];
 
 // Site grid order for Correct Score (row by row): 0:0 1:0 2:0 3:0 4:0 0:1 ...
 const CS_ORDER=[0,1,2,3,4].flatMap(a=>[0,1,2,3,4].map(h=>`${h}-${a}`));
@@ -484,7 +540,21 @@ function parseMarketOCR(raw){
   let active=null;
   const lastLine={};   // last O/U goal line seen per market
   let csPrev=-1;       // index of last correct-score cell assigned
+  let atTop=false;     // true until the first real line of a screenshot
+  const orphans=[];    // O/U rows found at the top of a screenshot
+  const OU_MARKETS=["FT_OU","HT_OU","Home_Team_OU","Away_Team_OU"];
+  const OU_MAX={FT_OU:5.5,HT_OU:3.5,Home_Team_OU:3.5,Away_Team_OU:3.5};
   let half=false;
+  let blocked=false;   // last heading was a market the model does not use
+  let guessed=null;    // market whose heading was unreadable
+  const queueGuess=[]; // O/U rows to flag once filled
+
+  const noteGuess=(keys)=>keys.forEach(k=>{
+    if(out[k]&&!out[k].conflict&&!out[k].why){
+      out[k].repaired=out[k].repaired||"(heading unreadable)";
+      out[k].why="market heading unreadable, taken from page order";
+    }
+  });
 
   for(const line of lines){
     const lo=line.toLowerCase();
@@ -492,10 +562,28 @@ function parseMarketOCR(raw){
     // Screenshots are consecutive scrolls, so the market at the bottom
     // of one usually continues at the top of the next (e.g. O/U 5.5).
     // Keep the active market; just skip the boundary marker.
-    if(/next screenshot/.test(lo))continue;
+    if(/next screenshot/.test(lo)){atTop=true;continue;}
 
     // Status bar / app header / footer lines repeated on every screenshot.
     if(/instant football|main goals|betslip|next round|\bngn\b|\bvs\b|^\d{1,2}:\d{2}\s+\S/.test(lo))continue;
+
+    // A row like "5.5 7.81 1.08" at the very top of a screenshot belongs
+    // to the market at the bottom of the screenshot ABOVE it in scroll
+    // order. If screenshots were chosen in a different order, the
+    // current market is wrong, so park the row and place it at the end.
+    if(atTop){
+      const om=line.match(/^([0-5])(?:\s*[.,:]\s*|\d?)5\)?\s+(\d{1,3}[.,]\d{2})\s+(\d{1,3}[.,]\d{2})$/);
+      if(om&&!OU_MARKETS.includes(active)){
+        orphans.push({
+          n:Number(om[1])+0.5,
+          o:Number(om[2].replace(",",".")),
+          u:Number(om[3].replace(",",".")),
+          line
+        });
+        continue;
+      }
+      atTop=false;
+    }
 
     const lineOdds=oddsIn(line);
 
@@ -505,31 +593,37 @@ function parseMarketOCR(raw){
        (!lineOdds.length&&OTHER_MARKET.test(lo))){
       active=null;
       half=false;
+      blocked=true;
       continue;
     }
+
 
     // FIRST HALF MARKETS
 
     if(/1st\s*half\s*1x2/.test(lo)){
       half=true;
       active="HT_1X2";
+      blocked=false;guessed=null;
       continue;
     }
 
     if(/1st\s*half\s*(o\s*\/\s*u|0\s*\/\s*u|over\s*\/\s*under)/.test(lo)){
       half=true;
       active="HT_OU";
+      blocked=false;guessed=null;
       continue;
     }
 
     if(/1st\s*half\s*double chance/.test(lo)){
       half=true;
       active="HT_Double_Chance";
+      blocked=false;guessed=null;
       continue;
     }
 
     if(/1st\s*half.*first goal/.test(lo)){
       active="HT_First_Goal";
+      blocked=false;guessed=null;
       continue;
     }
 
@@ -546,12 +640,14 @@ function parseMarketOCR(raw){
     if(/1x2.*1up/.test(lo)){
       half=false;
       active="FT_1X2_1UP";
+      blocked=false;guessed=null;
       continue;
     }
 
     if(/1x2.*2up/.test(lo)){
       half=false;
       active="FT_1X2_2UP";
+      blocked=false;guessed=null;
       continue;
     }
 
@@ -560,6 +656,7 @@ function parseMarketOCR(raw){
     if(/incorrect score/.test(lo)){
       active="Incorrect_Score_proxy";
       half=false;
+      blocked=false;guessed=null;
       continue;
     }
 
@@ -567,6 +664,7 @@ function parseMarketOCR(raw){
       active="Correct_Score";
       csPrev=-1;
       half=false;
+      blocked=false;guessed=null;
       continue;
     }
 
@@ -575,41 +673,48 @@ function parseMarketOCR(raw){
     if(/home team\s*(o\s*\/\s*u|0\s*\/\s*u|over|under)/.test(lo)){
       active="Home_Team_OU";
       half=false;
+      blocked=false;guessed=null;
       continue;
     }
 
     if(/away team\s*(o\s*\/\s*u|0\s*\/\s*u|over|under)/.test(lo)){
       active="Away_Team_OU";
       half=false;
+      blocked=false;guessed=null;
       continue;
     }
 
     if(/teams? to score/.test(lo)){
       active="Teams_to_Score";
       half=false;
+      blocked=false;guessed=null;
       continue;
     }
 
     if(/gg\s*\/\s*ng/.test(lo)){
       active="GG_NG";
       half=false;
+      blocked=false;guessed=null;
       continue;
     }
 
     if(/handicap/.test(lo)){
       active="HANDICAP";
       half=false;
+      blocked=false;guessed=null;
       continue;
     }
 
     if(/double chance/.test(lo)){
       active="FT_Double_Chance";
       half=false;
+      blocked=false;guessed=null;
       continue;
     }
 
     if(/first goal/.test(lo)){
       active="HT_First_Goal";
+      blocked=false;guessed=null;
       continue;
     }
 
@@ -619,6 +724,7 @@ function parseMarketOCR(raw){
     if(/\b1x2\b/.test(lo)){
       active="FT_1X2";
       half=false;
+      blocked=false;guessed=null;
       continue;
     }
 
@@ -628,12 +734,32 @@ function parseMarketOCR(raw){
     if(/\b(?:o|0)\s*\/\s*u\b/.test(lo) ||
        /\bover\s*\/\s*under\b/.test(lo)){
       active=half?"HT_OU":"FT_OU";
+      blocked=false;guessed=null;
       continue;
     }
 
+    // (a heading line above changed the market and `continue`d)
+
     const odds=lineOdds;
 
-    if(!odds.length||!active)continue;
+    // Rows that identify their own market even if its heading was misread.
+    if(odds.length&&!blocked){
+      if(/\byes\b/.test(lo)&&/\bno\b/.test(lo)&&active!=="GG_NG"){
+        active="GG_NG";guessed="GG_NG";
+      }else if(/only\s*home|only\s*away|both\s*teams/.test(lo)&&active!=="Teams_to_Score"){
+        active="Teams_to_Score";guessed="Teams_to_Score";
+      }else if(/^(?:0?[.,:]5|05)\s+\d/.test(line)&&!OU_MARKETS.includes(active)){
+        // A "0.5 x y" row starts an O/U block: the heading was misread.
+        // Use the next O/U market in page order that is still empty.
+        const from=PAGE_ORDER.indexOf(active);
+        const next=PAGE_ORDER.slice(from+1).find(mk=>
+          OU_MARKETS.includes(mk)&&!out[`${mk}__Over_0.5`]&&!out[`${mk}__Under_0.5`]);
+        if(next){active=next;guessed=next;}
+      }
+    }
+
+    if(!odds.length&&!/locked/i.test(lo))continue;
+    if(!active)continue;
 
     // 1X2 MARKETS
 
@@ -648,21 +774,24 @@ function parseMarketOCR(raw){
         ...lo.matchAll(/\b(home|draw|away)\b/g)
       ].map(m=>m[1]);
 
-      if(labels.length>=3&&odds.length>=3){
-        labels.slice(0,3).forEach((lab,j)=>{
-          putMatch(
-            out,
-            `${active}__${lab[0].toUpperCase()+lab.slice(1)}`,
-            odds[j].v,
-            line
-          );
+      const labPos=[...lo.matchAll(/\b(home|draw|away)\b/g)];
+
+      if(labPos.length>=3){
+        // Each label takes the price between it and the next label, so a
+        // locked cell ("Draw LOCKED") only loses its own price.
+        // Damaged prices ("Draw 230") are recovered and flagged.
+        labPos.slice(0,3).forEach((lm,j)=>{
+          const end=lm.index+lm[0].length;
+          const stop=j<2?labPos[j+1].index:Infinity;
+          const o=slots(line,end-1).find(x=>x.i<stop);
+          if(o&&!o.locked){
+            putFrom(out,`${active}__${lm[1][0].toUpperCase()+lm[1].slice(1)}`,o,line);
+          }
         });
-      }else if(labels.length===0&&odds.length===3){
+      }else if(labels.length===0){
         // OCR often puts "Home Draw Away" on its own line and the
         // three prices on the next; take them in screen order.
-        ["Home","Draw","Away"].forEach((k,j)=>{
-          putMatch(out,`${active}__${k}`,odds[j].v,line);
-        });
+        putSlots(out,["Home","Draw","Away"].map(k=>`${active}__${k}`),slots(line),line);
       }
 
       continue;
@@ -674,22 +803,16 @@ function parseMarketOCR(raw){
       "FT_Double_Chance",
       "HT_Double_Chance"
     ].includes(active)){
-      const dc=odds.length>=3?odds:oddsLoose(line);
-      if(dc.length>=3){
-        ["1X","12","X2"].forEach((k,j)=>{
-          putFrom(out,`${active}__${k}`,dc[j],line);
-        });
-      }
+      putSlots(out,["1X","12","X2"].map(k=>`${active}__${k}`),slots(line),line);
+      if(guessed===active)noteGuess(["1X","12","X2"].map(k=>`${active}__${k}`));
       continue;
     }
 
     // GG / NG
 
     if(active==="GG_NG"){
-      if(odds.length>=2){
-        putMatch(out,"GG_NG__GG_Yes",odds[0].v,line);
-        putMatch(out,"GG_NG__NG_No",odds[1].v,line);
-      }
+      putSlots(out,["GG_NG__GG_Yes","GG_NG__NG_No"],slots(line),line);
+      if(guessed==="GG_NG")noteGuess(["GG_NG__GG_Yes","GG_NG__NG_No"]);
       continue;
     }
 
@@ -723,6 +846,8 @@ function parseMarketOCR(raw){
           putMatch(out,`Teams_to_Score__${k}`,odds[j].v,line);
         });
       }
+      if(guessed==="Teams_to_Score")
+        noteGuess(["None","Only_Home","Only_Away","Both"].map(k=>`Teams_to_Score__${k}`));
 
       continue;
     }
@@ -730,11 +855,7 @@ function parseMarketOCR(raw){
     // FIRST HALF FIRST GOAL
 
     if(active==="HT_First_Goal"){
-      if(odds.length>=3){
-        ["Home","None","Away"].forEach((k,j)=>{
-          putMatch(out,`HT_First_Goal__${k}`,odds[j].v,line);
-        });
-      }
+      putSlots(out,["Home","None","Away"].map(k=>`HT_First_Goal__${k}`),slots(line),line);
       continue;
     }
 
@@ -745,8 +866,8 @@ function parseMarketOCR(raw){
         /\b(0\s*[:\-]\s*1|0\s*[:\-]\s*2|1\s*[:\-]\s*0|2\s*[:\-]\s*0)\b/
       );
 
-      const ho=odds.length>=3?odds:oddsLoose(line).filter(x=>!h||x.i>h.index+h[0].length);
-      if(h&&ho.length>=3){
+      const ho=h?slots(line,h.index+h[0].length-1):[];
+      if(h&&ho.length===3){
         const key={
           "0-1":"Handicap_0_1",
           "0-2":"Handicap_0_2",
@@ -757,9 +878,7 @@ function parseMarketOCR(raw){
         ];
 
         if(key){
-          ["Home","Draw","Away"].forEach((k,j)=>{
-            putFrom(out,`${key}__${k}`,ho[j],line);
-          });
+          putSlots(out,["Home","Draw","Away"].map(k=>`${key}__${k}`),ho,line);
         }
       }
 
@@ -778,7 +897,8 @@ function parseMarketOCR(raw){
       "Away_Team_OU"
     ].includes(active)){
 
-      const head=line.slice(0,odds[0].i).trim();
+      if(!odds.length)continue;   // row with every price locked
+      const head=line.slice(0,odds[0].i).replace(/locked/ig,"").trim();
 
       // Goal line: "2.5", "2,5", "2:5", "25", and slips like "225".
       const m=head.match(
@@ -800,6 +920,10 @@ function parseMarketOCR(raw){
 
         if(n>=0.5&&n<=5.5){
           lastLine[active]=n;
+          if(guessed===active){
+            const ks=[`${active}__Over_${n}`,`${active}__Under_${n}`];
+            queueGuess.push(ks);
+          }
 
           if(byOrder){
             putMatch(out,`${active}__Over_${n}`,odds[0].v,line);
@@ -821,7 +945,11 @@ function parseMarketOCR(raw){
             // line says which side it is; otherwise flag for review
             // instead of assuming it is Over.
             const hasOver=/\bover\b/.test(lo),hasUnder=/\bunder\b/.test(lo);
-            if(hasOver&&!hasUnder){
+            const lk=lo.search(/locked/);
+            if(lk>=0){
+              // "3.5 16.25 LOCKED" -> Over; "3.5 LOCKED 1.04" -> Under.
+              putMatch(out,`${active}__${lk>odds[0].i?"Over":"Under"}_${n}`,odds[0].v,line);
+            }else if(hasOver&&!hasUnder){
               putMatch(out,`${active}__Over_${n}`,odds[0].v,line);
             }else if(hasUnder&&!hasOver){
               putMatch(out,`${active}__Under_${n}`,odds[0].v,line);
@@ -859,6 +987,8 @@ function parseMarketOCR(raw){
         prevPriceAt=o.i;
 
         if(lab){
+          // Incorrect score: the model only uses 0:0, 1:0, 2:0 and 3:0.
+          if(active==="Incorrect_Score_proxy"&&!/^[0-3]-0$/.test(lab.k))return;
           putFrom(out,`${active}__${lab.k}`,o,line);
           csPrev=CS_ORDER.indexOf(lab.k);
           return;
@@ -893,8 +1023,77 @@ function parseMarketOCR(raw){
     }
   }
 
+  queueGuess.forEach(noteGuess);
+
+  // Place each parked row after the last row of the one O/U market it
+  // can continue (e.g. 5.5 only after FT O/U 4.5). Ambiguous: skip.
+  orphans.forEach(r=>{
+    const fits=OU_MARKETS.filter(mk=>
+      r.n<=OU_MAX[mk]&&
+      lastLine[mk]===r.n-1&&
+      !out[`${mk}__Over_${r.n}`]
+    );
+    if(fits.length!==1)return;
+    const mk=fits[0];
+    [["Over",r.o],["Under",r.u]].forEach(([side,v])=>{
+      const k=`${mk}__${side}_${r.n}`;
+      putMatch(out,k,v,r.line);
+      if(out[k]&&!out[k].conflict){
+        out[k].repaired=r.line;
+        out[k].why="row from top of another screenshot, placed by order";
+      }
+    });
+    lastLine[mk]=r.n;
+  });
+
   return out;
 }
+
+// ============================================
+// TEAM NAMES FROM THE "HOME vs AWAY" LINE
+// ============================================
+// Every screenshot repeats the match bar ("VIL vs VCF"). OCR adds junk
+// around it, so take the name on each side of "vs" and use the most
+// common reading across all screenshots.
+
+function detectTeams(raw){
+  const votes={};
+  String(raw||"").split(/\r?\n/).forEach(l=>{
+    const m=l.match(/([A-Za-z][A-Za-z0-9]{1,11})\s+vs\.?\s+([A-Za-z][A-Za-z0-9]{1,11})/i);
+    if(!m)return;
+    const k=m[1].toUpperCase()+"|"+m[2].toUpperCase();
+    votes[k]=(votes[k]||0)+1;
+  });
+  const best=Object.entries(votes).sort((a,b)=>b[1]-a[1])[0];
+  if(!best)return null;
+  const [home,away]=best[0].split("|");
+  return {home,away,seen:best[1]};
+}
+
+function applyTeams(t){
+  if(!t)return "";
+  const set=(id,name)=>{
+    const el=$(id);
+    const cur=el.value.trim();
+    // Replace empty or previously auto-filled names; ask before
+    // replacing a name you typed yourself.
+    if(!cur||el.dataset.auto==="1"||cur.toUpperCase()===name){
+      el.value=name;el.dataset.auto="1";return true;
+    }
+    if(confirm(`Screenshots show "${name}" but the ${id==="homeTeam"?"home":"away"} team field says "${cur}". Replace it?`)){
+      el.value=name;el.dataset.auto="1";return true;
+    }
+    return false;
+  };
+  set("homeTeam",t.home);
+  set("awayTeam",t.away);
+  return `Match detected: ${$("homeTeam").value} vs ${$("awayTeam").value}. `;
+}
+
+["homeTeam","awayTeam"].forEach(id=>{
+  // Typing in the box makes it your own name, not an auto-filled one.
+  $(id).addEventListener("input",()=>{$(id).dataset.auto="0";});
+});
 
 // ============================================
 // OCR REPORT
@@ -934,8 +1133,63 @@ function showOcrReport(){
 // OCR SCREENSHOT PROCESSING
 // ============================================
 
-// Enlarge small images (e.g. WhatsApp copies) and convert to grayscale.
-// In testing this raised correct reads from 68 to 102 of 103 odds.
+// Prepare a screenshot for OCR:
+//  1. enlarge small images (e.g. WhatsApp copies) 2x;
+//  2. replace each grey lock cell with the word LOCKED. Without this,
+//     Tesseract treats the dark cell as a picture and drops the whole row
+//     (e.g. "Away Team O/U 3.5  16.25  [lock]"), and with it the parser
+//     can tell which side is locked;
+//  3. convert to grayscale.
+// Tested on 5 MCF vs RAY screenshots: 103 of 103 visible odds, 0 wrong.
+function markLocks(ctx,w,h){
+  const img=ctx.getImageData(0,0,w,h),d=img.data;
+  const isLock=k=>{
+    const r=d[k],g=d[k+1],b=d[k+2];
+    const mx=Math.max(r,g,b),mn=Math.min(r,g,b),m=(r+g+b)/3;
+    // neutral grey: the cell (80,84,95) and its lock icon (155,164,173);
+    // odds text is green and the team-name bar is darker, so untouched
+    return mx-mn<=25&&m>=70&&m<=185;
+  };
+  const minRun=Math.round(w*0.15),tol=8;
+  let open=[],rects=[];
+  for(let y=0;y<h;y++){
+    const runs=[];
+    for(let x=0;x<w;){
+      if(isLock((y*w+x)*4)){
+        const x0=x;
+        while(x<w&&isLock((y*w+x)*4))x++;
+        if(x-x0>=minRun)runs.push([x0,x]);
+      }else x++;
+    }
+    const next=[];
+    runs.forEach(([a,b])=>{
+      const k=open.findIndex(r=>Math.abs(r.a-a)<=tol&&Math.abs(r.b-b)<=tol);
+      if(k>=0){const r=open.splice(k,1)[0];r.y1=y;next.push(r);}
+      else next.push({a,b,y0:y,y1:y});
+    });
+    rects.push(...open);
+    open=next;
+  }
+  rects.push(...open);
+  rects=rects.filter(r=>r.y1-r.y0>=h*0.015);
+  ctx.textAlign="center";ctx.textBaseline="middle";
+  ctx.font=`bold ${Math.round(w*0.032)}px sans-serif`;
+  rects.forEach(r=>{
+    ctx.fillStyle="#fff";ctx.fillRect(r.a,r.y0,r.b-r.a+1,r.y1-r.y0+1);
+    ctx.fillStyle="#000";ctx.fillText("LOCKED",(r.a+r.b)/2,(r.y0+r.y1)/2);
+  });
+  return rects.length;
+}
+
+function toGray(ctx,w,h){
+  const img=ctx.getImageData(0,0,w,h),d=img.data;
+  for(let k=0;k<d.length;k+=4){
+    const v=Math.round(0.299*d[k]+0.587*d[k+1]+0.114*d[k+2]);
+    d[k]=d[k+1]=d[k+2]=v;
+  }
+  ctx.putImageData(img,0,0);
+}
+
 async function prepareForOcr(file){
   try{
     const bmp=await createImageBitmap(file);
@@ -943,12 +1197,13 @@ async function prepareForOcr(file){
     const c=document.createElement("canvas");
     c.width=Math.round(bmp.width*scale);
     c.height=Math.round(bmp.height*scale);
-    const ctx=c.getContext("2d");
+    const ctx=c.getContext("2d",{willReadFrequently:true});
     ctx.imageSmoothingEnabled=true;
     ctx.imageSmoothingQuality="high";
-    if("filter" in ctx)ctx.filter="grayscale(1)";
     ctx.drawImage(bmp,0,0,c.width,c.height);
     bmp.close?.();
+    markLocks(ctx,c.width,c.height);
+    toGray(ctx,c.width,c.height);
     return c;
   }catch(e){
     return file; // older browsers: use the original image
@@ -1010,8 +1265,10 @@ $("runOcr").onclick=async()=>{
 
     showOcrReport();
 
+    const teamNote=applyTeams(detectTeams(all));
+
     $("ocrStatus").textContent=
-      `OCR complete. Identified ${Object.keys(OCR_MATCHES).length} market-feature matches. Review the mapping report before filling.`;
+      teamNote+`OCR complete. Identified ${Object.keys(OCR_MATCHES).length} market-feature matches. Review the mapping report before filling.`;
 
   }catch(e){
     $("ocrStatus").textContent="OCR failed: "+e.message;
