@@ -1,0 +1,460 @@
+{
+  "FT_1X2": [
+    {
+      "key": "FT_1X2__Home",
+      "label": "Home"
+    },
+    {
+      "key": "FT_1X2__Draw",
+      "label": "Draw"
+    },
+    {
+      "key": "FT_1X2__Away",
+      "label": "Away"
+    }
+  ],
+  "FT_1X2_1UP": [
+    {
+      "key": "FT_1X2_1UP__Home",
+      "label": "Home"
+    },
+    {
+      "key": "FT_1X2_1UP__Draw",
+      "label": "Draw"
+    },
+    {
+      "key": "FT_1X2_1UP__Away",
+      "label": "Away"
+    }
+  ],
+  "FT_1X2_2UP": [
+    {
+      "key": "FT_1X2_2UP__Home",
+      "label": "Home"
+    },
+    {
+      "key": "FT_1X2_2UP__Draw",
+      "label": "Draw"
+    },
+    {
+      "key": "FT_1X2_2UP__Away",
+      "label": "Away"
+    }
+  ],
+  "FT_OU": [
+    {
+      "key": "FT_OU__Over_0.5",
+      "label": "Over 0.5"
+    },
+    {
+      "key": "FT_OU__Under_0.5",
+      "label": "Under 0.5"
+    },
+    {
+      "key": "FT_OU__Over_1.5",
+      "label": "Over 1.5"
+    },
+    {
+      "key": "FT_OU__Under_1.5",
+      "label": "Under 1.5"
+    },
+    {
+      "key": "FT_OU__Over_2.5",
+      "label": "Over 2.5"
+    },
+    {
+      "key": "FT_OU__Under_2.5",
+      "label": "Under 2.5"
+    },
+    {
+      "key": "FT_OU__Over_3.5",
+      "label": "Over 3.5"
+    },
+    {
+      "key": "FT_OU__Under_3.5",
+      "label": "Under 3.5"
+    },
+    {
+      "key": "FT_OU__Over_4.5",
+      "label": "Over 4.5"
+    },
+    {
+      "key": "FT_OU__Under_4.5",
+      "label": "Under 4.5"
+    },
+    {
+      "key": "FT_OU__Over_5.5",
+      "label": "Over 5.5"
+    },
+    {
+      "key": "FT_OU__Under_5.5",
+      "label": "Under 5.5"
+    }
+  ],
+  "FT_Double_Chance": [
+    {
+      "key": "FT_Double_Chance__1X",
+      "label": "1X"
+    },
+    {
+      "key": "FT_Double_Chance__12",
+      "label": "12"
+    },
+    {
+      "key": "FT_Double_Chance__X2",
+      "label": "X2"
+    }
+  ],
+  "GG_NG": [
+    {
+      "key": "GG_NG__GG_Yes",
+      "label": "GG Yes"
+    },
+    {
+      "key": "GG_NG__NG_No",
+      "label": "NG No"
+    }
+  ],
+  "Handicap_0_1": [
+    {
+      "key": "Handicap_0_1__Home",
+      "label": "Home"
+    },
+    {
+      "key": "Handicap_0_1__Draw",
+      "label": "Draw"
+    },
+    {
+      "key": "Handicap_0_1__Away",
+      "label": "Away"
+    }
+  ],
+  "Handicap_0_2": [
+    {
+      "key": "Handicap_0_2__Home",
+      "label": "Home"
+    },
+    {
+      "key": "Handicap_0_2__Draw",
+      "label": "Draw"
+    },
+    {
+      "key": "Handicap_0_2__Away",
+      "label": "Away"
+    }
+  ],
+  "Handicap_1_0": [
+    {
+      "key": "Handicap_1_0__Home",
+      "label": "Home"
+    },
+    {
+      "key": "Handicap_1_0__Draw",
+      "label": "Draw"
+    },
+    {
+      "key": "Handicap_1_0__Away",
+      "label": "Away"
+    }
+  ],
+  "Handicap_2_0": [
+    {
+      "key": "Handicap_2_0__Home",
+      "label": "Home"
+    },
+    {
+      "key": "Handicap_2_0__Draw",
+      "label": "Draw"
+    },
+    {
+      "key": "Handicap_2_0__Away",
+      "label": "Away"
+    }
+  ],
+  "Teams_to_Score": [
+    {
+      "key": "Teams_to_Score__None",
+      "label": "None"
+    },
+    {
+      "key": "Teams_to_Score__Only_Home",
+      "label": "Only Home"
+    },
+    {
+      "key": "Teams_to_Score__Only_Away",
+      "label": "Only Away"
+    },
+    {
+      "key": "Teams_to_Score__Both",
+      "label": "Both"
+    }
+  ],
+  "Correct_Score": [
+    {
+      "key": "Correct_Score__0-0",
+      "label": "0\u20130"
+    },
+    {
+      "key": "Correct_Score__1-0",
+      "label": "1\u20130"
+    },
+    {
+      "key": "Correct_Score__2-0",
+      "label": "2\u20130"
+    },
+    {
+      "key": "Correct_Score__3-0",
+      "label": "3\u20130"
+    },
+    {
+      "key": "Correct_Score__4-0",
+      "label": "4\u20130"
+    },
+    {
+      "key": "Correct_Score__0-1",
+      "label": "0\u20131"
+    },
+    {
+      "key": "Correct_Score__1-1",
+      "label": "1\u20131"
+    },
+    {
+      "key": "Correct_Score__2-1",
+      "label": "2\u20131"
+    },
+    {
+      "key": "Correct_Score__3-1",
+      "label": "3\u20131"
+    },
+    {
+      "key": "Correct_Score__4-1",
+      "label": "4\u20131"
+    },
+    {
+      "key": "Correct_Score__0-2",
+      "label": "0\u20132"
+    },
+    {
+      "key": "Correct_Score__1-2",
+      "label": "1\u20132"
+    },
+    {
+      "key": "Correct_Score__2-2",
+      "label": "2\u20132"
+    },
+    {
+      "key": "Correct_Score__3-2",
+      "label": "3\u20132"
+    },
+    {
+      "key": "Correct_Score__4-2",
+      "label": "4\u20132"
+    },
+    {
+      "key": "Correct_Score__0-3",
+      "label": "0\u20133"
+    },
+    {
+      "key": "Correct_Score__1-3",
+      "label": "1\u20133"
+    },
+    {
+      "key": "Correct_Score__2-3",
+      "label": "2\u20133"
+    },
+    {
+      "key": "Correct_Score__3-3",
+      "label": "3\u20133"
+    },
+    {
+      "key": "Correct_Score__4-3",
+      "label": "4\u20133"
+    },
+    {
+      "key": "Correct_Score__0-4",
+      "label": "0\u20134"
+    },
+    {
+      "key": "Correct_Score__1-4",
+      "label": "1\u20134"
+    },
+    {
+      "key": "Correct_Score__2-4",
+      "label": "2\u20134"
+    },
+    {
+      "key": "Correct_Score__3-4",
+      "label": "3\u20134"
+    },
+    {
+      "key": "Correct_Score__4-4",
+      "label": "4\u20134"
+    },
+    {
+      "key": "Correct_Score__Other",
+      "label": "Other"
+    }
+  ],
+  "Incorrect_Score_proxy": [
+    {
+      "key": "Incorrect_Score_proxy__0-0",
+      "label": "0\u20130"
+    },
+    {
+      "key": "Incorrect_Score_proxy__1-0",
+      "label": "1\u20130"
+    },
+    {
+      "key": "Incorrect_Score_proxy__2-0",
+      "label": "2\u20130"
+    },
+    {
+      "key": "Incorrect_Score_proxy__3-0",
+      "label": "3\u20130"
+    }
+  ],
+  "Home_Team_OU": [
+    {
+      "key": "Home_Team_OU__Over_0.5",
+      "label": "Over 0.5"
+    },
+    {
+      "key": "Home_Team_OU__Under_0.5",
+      "label": "Under 0.5"
+    },
+    {
+      "key": "Home_Team_OU__Over_1.5",
+      "label": "Over 1.5"
+    },
+    {
+      "key": "Home_Team_OU__Under_1.5",
+      "label": "Under 1.5"
+    },
+    {
+      "key": "Home_Team_OU__Over_2.5",
+      "label": "Over 2.5"
+    },
+    {
+      "key": "Home_Team_OU__Under_2.5",
+      "label": "Under 2.5"
+    },
+    {
+      "key": "Home_Team_OU__Over_3.5",
+      "label": "Over 3.5"
+    },
+    {
+      "key": "Home_Team_OU__Under_3.5",
+      "label": "Under 3.5"
+    }
+  ],
+  "Away_Team_OU": [
+    {
+      "key": "Away_Team_OU__Over_0.5",
+      "label": "Over 0.5"
+    },
+    {
+      "key": "Away_Team_OU__Under_0.5",
+      "label": "Under 0.5"
+    },
+    {
+      "key": "Away_Team_OU__Over_1.5",
+      "label": "Over 1.5"
+    },
+    {
+      "key": "Away_Team_OU__Under_1.5",
+      "label": "Under 1.5"
+    },
+    {
+      "key": "Away_Team_OU__Over_2.5",
+      "label": "Over 2.5"
+    },
+    {
+      "key": "Away_Team_OU__Under_2.5",
+      "label": "Under 2.5"
+    },
+    {
+      "key": "Away_Team_OU__Over_3.5",
+      "label": "Over 3.5"
+    },
+    {
+      "key": "Away_Team_OU__Under_3.5",
+      "label": "Under 3.5"
+    }
+  ],
+  "HT_1X2": [
+    {
+      "key": "HT_1X2__Home",
+      "label": "Home"
+    },
+    {
+      "key": "HT_1X2__Draw",
+      "label": "Draw"
+    },
+    {
+      "key": "HT_1X2__Away",
+      "label": "Away"
+    }
+  ],
+  "HT_OU": [
+    {
+      "key": "HT_OU__Over_0.5",
+      "label": "Over 0.5"
+    },
+    {
+      "key": "HT_OU__Under_0.5",
+      "label": "Under 0.5"
+    },
+    {
+      "key": "HT_OU__Over_1.5",
+      "label": "Over 1.5"
+    },
+    {
+      "key": "HT_OU__Under_1.5",
+      "label": "Under 1.5"
+    },
+    {
+      "key": "HT_OU__Over_2.5",
+      "label": "Over 2.5"
+    },
+    {
+      "key": "HT_OU__Under_2.5",
+      "label": "Under 2.5"
+    },
+    {
+      "key": "HT_OU__Over_3.5",
+      "label": "Over 3.5"
+    },
+    {
+      "key": "HT_OU__Under_3.5",
+      "label": "Under 3.5"
+    }
+  ],
+  "HT_Double_Chance": [
+    {
+      "key": "HT_Double_Chance__1X",
+      "label": "1X"
+    },
+    {
+      "key": "HT_Double_Chance__12",
+      "label": "12"
+    },
+    {
+      "key": "HT_Double_Chance__X2",
+      "label": "X2"
+    }
+  ],
+  "HT_First_Goal": [
+    {
+      "key": "HT_First_Goal__Home",
+      "label": "Home"
+    },
+    {
+      "key": "HT_First_Goal__None",
+      "label": "None"
+    },
+    {
+      "key": "HT_First_Goal__Away",
+      "label": "Away"
+    }
+  ]
+}
