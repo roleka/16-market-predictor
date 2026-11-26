@@ -1,4 +1,3 @@
-
 let MODEL=null, GROUPS=null, LAST=null;
 const $=id=>document.getElementById(id);
 const NFEAT=()=>MODEL?MODEL.features.length:0;
@@ -204,7 +203,7 @@ function exportInputs(){
 
 function parseCSV(text){
   // Strip the byte-order mark Excel adds, otherwise "Feature" is not found.
-  const lines=text.replace(/^﻿/,"").trim().split(/\r?\n/);
+  const lines=text.replace(/^\uFEFF/,"").trim().split(/\r?\n/);
 
   const parse=line=>{
     let a=[],cur="",q=false;
@@ -452,7 +451,7 @@ function cleanOcrLine(s){
 
 function oddsIn(s){
   return [...String(s).matchAll(
-    /(?<![\d.])(\d{1,3}[.,]\d{2})(?![\d.])/g
+    /(?<![\d.])(\d{1,3}[.,]\d{2})(?!\d|[.,]\d)/g
   )]
     .map(m=>({
       v:Number(m[1].replace(",",".")),
@@ -528,7 +527,7 @@ function putUncertain(out,key,odd,line){
 
 // Markets the model does not use. Seeing one of these headers must stop
 // the previous market from swallowing its odds.
-const OTHER_MARKET=/odd\s*\/\s*even|highest scoring|ht\s*\/\s*ft|half\s*time\s*\/\s*full|clean sheet|win to nil|exact goals|multi\s*goals?|corner|card|booking|penalt|draw no bet|winning margin|\s(?:&|\+)\s|\band\b.*(?:o\s*\/\s*u|gg|1x2)/;
+const OTHER_MARKET=/last goal|goal bounds|odd\s*\/\s*even|highest scoring|ht\s*\/\s*ft|half\s*time\s*\/\s*full|clean sheet|win to nil|exact goals|multi\s*goals?|corner|card|booking|penalt|draw no bet|winning margin|\s(?:&|\+)\s|\band\b.*(?:o\s*\/\s*u|gg|1x2)/;
 
 function parseMarketOCR(raw){
   const lines=String(raw||"")
@@ -712,9 +711,10 @@ function parseMarketOCR(raw){
       continue;
     }
 
-    if(/first goal/.test(lo)){
-      active="HT_First_Goal";
-      blocked=false;guessed=null;
+    // Full-time "First Goal" (no "1st half") is a different market that
+    // the model does not use. It used to be filed as 1st Half First Goal.
+    if(/first goal/.test(lo)&&!lineOdds.length){
+      active=null;blocked=true;
       continue;
     }
 
@@ -1030,7 +1030,9 @@ function parseMarketOCR(raw){
   orphans.forEach(r=>{
     const fits=OU_MARKETS.filter(mk=>
       r.n<=OU_MAX[mk]&&
-      lastLine[mk]===r.n-1&&
+      // 4.5 and 5.5 lines exist only in full-time O/U, so they can be
+      // placed even when the screenshot above them was not included.
+      (lastLine[mk]===r.n-1||(r.n>3.5&&mk==="FT_OU"))&&
       !out[`${mk}__Over_${r.n}`]
     );
     if(fits.length!==1)return;
@@ -1110,247 +1112,4 @@ function showOcrReport(){
   const missing=MODEL.features.filter(k=>!OCR_MATCHES[k]);
 
   // Keys the parser produced that the model has no field for:
-  // usually a naming mismatch with features.json.
-  const unknown=entries.filter(([k])=>!MODEL.features.includes(k));
-
-  const names=entries.map(([k,v])=>
-    `${k.replaceAll("__"," / ")}: ${v.odd.toFixed(2)}${v.conflict?" ⚠ conflict "+v.alternatives.map(x=>x.toFixed(2)).join(" vs "):""}${v.uncertain?" ? side unclear, not filled":""}${v.repaired?` ⚙ ${v.why||"decimal point restored"} (read "${v.repaired}"), check`:""}${MODEL.features.includes(k)?"":" ✗ no such model field"}`
-  );
-
-  $("ocrOdds").textContent=
-    `Matched ${entries.length}/${NFEAT()} features. Conflicts: ${conflicts.length}. Unclear: ${uncertain.length}. Repaired: ${repaired.length}. Unknown keys: ${unknown.length}. Not found: ${missing.length}.\n`+
-    (repaired.length?
-      `\nREPAIRED (OCR text was damaged; check these against the screenshot):\n`+
-      repaired.map(([k,v])=>`  ${k.replaceAll("__"," / ")}: ${v.odd.toFixed(2)}  (${v.why||"decimal point restored"}; OCR read "${v.repaired}")`).join("\n")+"\n"
-      :"")+
-    (missing.length?
-      `\nNOT FOUND (enter manually or add a screenshot):\n  ${missing.join("\n  ")}\n\n`
-      :"\n")+
-    names.join("\n");
-}
-
-// ============================================
-// OCR SCREENSHOT PROCESSING
-// ============================================
-
-// Prepare a screenshot for OCR:
-//  1. enlarge small images (e.g. WhatsApp copies) 2x;
-//  2. replace each grey lock cell with the word LOCKED. Without this,
-//     Tesseract treats the dark cell as a picture and drops the whole row
-//     (e.g. "Away Team O/U 3.5  16.25  [lock]"), and with it the parser
-//     can tell which side is locked;
-//  3. convert to grayscale.
-// Tested on 5 MCF vs RAY screenshots: 103 of 103 visible odds, 0 wrong.
-function markLocks(ctx,w,h){
-  const img=ctx.getImageData(0,0,w,h),d=img.data;
-  const isLock=k=>{
-    const r=d[k],g=d[k+1],b=d[k+2];
-    const mx=Math.max(r,g,b),mn=Math.min(r,g,b),m=(r+g+b)/3;
-    // neutral grey: the cell (80,84,95) and its lock icon (155,164,173);
-    // odds text is green and the team-name bar is darker, so untouched
-    return mx-mn<=25&&m>=70&&m<=185;
-  };
-  const minRun=Math.round(w*0.15),tol=8;
-  let open=[],rects=[];
-  for(let y=0;y<h;y++){
-    const runs=[];
-    for(let x=0;x<w;){
-      if(isLock((y*w+x)*4)){
-        const x0=x;
-        while(x<w&&isLock((y*w+x)*4))x++;
-        if(x-x0>=minRun)runs.push([x0,x]);
-      }else x++;
-    }
-    const next=[];
-    runs.forEach(([a,b])=>{
-      const k=open.findIndex(r=>Math.abs(r.a-a)<=tol&&Math.abs(r.b-b)<=tol);
-      if(k>=0){const r=open.splice(k,1)[0];r.y1=y;next.push(r);}
-      else next.push({a,b,y0:y,y1:y});
-    });
-    rects.push(...open);
-    open=next;
-  }
-  rects.push(...open);
-  rects=rects.filter(r=>r.y1-r.y0>=h*0.015);
-  ctx.textAlign="center";ctx.textBaseline="middle";
-  ctx.font=`bold ${Math.round(w*0.032)}px sans-serif`;
-  rects.forEach(r=>{
-    ctx.fillStyle="#fff";ctx.fillRect(r.a,r.y0,r.b-r.a+1,r.y1-r.y0+1);
-    ctx.fillStyle="#000";ctx.fillText("LOCKED",(r.a+r.b)/2,(r.y0+r.y1)/2);
-  });
-  return rects.length;
-}
-
-function toGray(ctx,w,h){
-  const img=ctx.getImageData(0,0,w,h),d=img.data;
-  for(let k=0;k<d.length;k+=4){
-    const v=Math.round(0.299*d[k]+0.587*d[k+1]+0.114*d[k+2]);
-    d[k]=d[k+1]=d[k+2]=v;
-  }
-  ctx.putImageData(img,0,0);
-}
-
-async function prepareForOcr(file){
-  try{
-    const bmp=await createImageBitmap(file);
-    const scale=bmp.width<1000?2:1;
-    const c=document.createElement("canvas");
-    c.width=Math.round(bmp.width*scale);
-    c.height=Math.round(bmp.height*scale);
-    const ctx=c.getContext("2d",{willReadFrequently:true});
-    ctx.imageSmoothingEnabled=true;
-    ctx.imageSmoothingQuality="high";
-    ctx.drawImage(bmp,0,0,c.width,c.height);
-    bmp.close?.();
-    markLocks(ctx,c.width,c.height);
-    toGray(ctx,c.width,c.height);
-    return c;
-  }catch(e){
-    return file; // older browsers: use the original image
-  }
-}
-
-$("runOcr").onclick=async()=>{
-  const files=[...($("ocrFiles").files||[])];
-
-  if(!files.length){
-    alert("Choose at least one screenshot.");
-    return;
-  }
-
-  if(!window.Tesseract){
-    $("ocrStatus").textContent=
-      "OCR engine did not load. Connect to the internet and reload the app.";
-    return;
-  }
-
-  $("ocrStatus").textContent="Starting OCR engine…";
-
-  let texts=[];
-  let current=0;
-  let worker=null;
-
-  try{
-    worker=await Tesseract.createWorker("eng",1,{
-      logger:m=>{
-        if(m.status==="recognizing text"){
-          $("ocrStatus").textContent=
-            `OCR ${current+1}/${files.length}: ${Math.round((m.progress||0)*100)}%`;
-        }
-      }
-    });
-
-    // Mode 6 = one uniform block: reads the odds grid row by row.
-    // The default mode read the Correct Score grid column by column.
-    await worker.setParameters({tessedit_pageseg_mode:"6"});
-
-    for(let i=0;i<files.length;i++){
-      current=i;
-      $("ocrStatus").textContent=
-        `Reading screenshot ${i+1} of ${files.length}…`;
-
-      const img=await prepareForOcr(files[i]);
-      const result=await worker.recognize(img);
-
-      texts.push(result.data.text||"");
-    }
-
-    const all=texts.join(
-      "\n\n--- NEXT SCREENSHOT ---\n\n"
-    );
-
-    $("ocrText").value=all;
-
-    OCR_MATCHES=parseMarketOCR(all);
-
-    showOcrReport();
-
-    const teamNote=applyTeams(detectTeams(all));
-
-    $("ocrStatus").textContent=
-      teamNote+`OCR complete. Identified ${Object.keys(OCR_MATCHES).length} market-feature matches. Review the mapping report before filling.`;
-
-  }catch(e){
-    $("ocrStatus").textContent="OCR failed: "+e.message;
-  }finally{
-    if(worker)worker.terminate().catch(()=>{});
-  }
-};
-
-// ============================================
-// COPY OCR TEXT
-// ============================================
-
-$("copyOcr").onclick=()=>{
-  if(!$("ocrText").value)return;
-
-  navigator.clipboard?.writeText($("ocrText").value).then(
-    ()=>alert("OCR text copied."),
-    ()=>alert("Copy not available in this browser.")
-  );
-};
-
-// ============================================
-// FILL MATCHED ODDS
-// ============================================
-
-$("fillOcr").onclick=()=>{
-  const entries=Object.entries(OCR_MATCHES)
-    .filter(([,v])=>!v.conflict&&!v.uncertain);
-
-  if(!entries.length){
-    alert(
-      "No reliable market-to-feature matches were found. Check the OCR text and screenshots."
-    );
-    return;
-  }
-
-  const conflicts=Object.entries(OCR_MATCHES)
-    .filter(([,v])=>v.conflict||v.uncertain).length;
-
-  if(!confirm(
-    `Fill ${entries.length} recognised odds into their matching market fields? ${conflicts} conflicting or unclear fields will be skipped. Existing values will be replaced where a match is found.`
-  )){
-    return;
-  }
-
-  // Without this, odds left over from the previous match stay in the
-  // fields that this OCR run did not find, and feed the prediction.
-  if(confirm("Also clear every field NOT found in these screenshots? (Recommended when switching to a new match.)")){
-    document.querySelectorAll("[data-feature]").forEach(el=>el.value="");
-  }
-
-  entries.forEach(([key,v])=>{
-    const el=document.querySelector(
-      `[data-feature="${CSS.escape(key)}"]`
-    );
-
-    if(el){
-      el.value=v.odd.toFixed(2);
-    }
-  });
-
-  $("ocrStatus").textContent=
-    `Filled ${entries.length} market-matched fields. ${conflicts} conflicting/unclear skipped. Review any fields not found before predicting.`;
-};
-
-// ============================================
-// SERVICE WORKER
-// ============================================
-
-if("serviceWorker" in navigator){
-  window.addEventListener("load",()=>{
-    navigator.serviceWorker.register("./sw.js").catch(()=>{});
-  });
-}
-
-// ============================================
-// INITIALISE APPLICATION
-// ============================================
-
-init().catch(e=>{
-  document.querySelector("main").innerHTML=
-    "<section class=card>Could not load model data. Make sure all app files are in the same folder and open through a web server.</section>";
-
-  console.error(e);
-});
+  // usually a naming
